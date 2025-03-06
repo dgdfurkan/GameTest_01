@@ -55,44 +55,15 @@ jobs:
           done
           
           echo "FINAL_REPOS=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
+          echo "final_repos=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
+          echo "final_repos=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
           echo "::set-output name=final_repos::$(IFS=, ; echo "${FINAL_REPOS[*]}")"
 
-  update-repos-1:
+  update-repos:
     needs: get-repos
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure Git
-        run: |
-          git config --global user.email "frkngndz60@gmail.com"
-          git config --global user.name "dgdfurkan"
-          
-      - name: Update GunduzTech-based project 1
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          IFS=',' read -r -a REPO_ARRAY <<< "${{ needs.get-repos.outputs.final_repos }}"
-          if [[ ${#REPO_ARRAY[@]} -gt 0 ]]; then
-            repo=${REPO_ARRAY[0]}
-            echo "Updating $repo..."
-            git clone https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git
-            cd $repo
-            if [ -d "GunduzTech" ]; then
-              git checkout main
-              git pull origin main
-              if ! git ls-tree -d HEAD GunduzTech >/dev/null 2>&1; then
-                git subtree add --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
-              else
-                git subtree pull --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
-              fi
-              git add .
-              git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
-              git push origin main
-            fi
-            cd ..
-          fi
-
-  update-repos-2:
-    needs: get-repos
+    strategy:
+      matrix:
+        repo-index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     runs-on: ubuntu-latest
     steps:
       - name: Configure Git
@@ -100,47 +71,13 @@ jobs:
           git config --global user.email "frkngndz60@gmail.com"
           git config --global user.name "dgdfurkan"
 
-      - name: Update GunduzTech-based project 2
+      - name: Update GunduzTech-based project
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           IFS=',' read -r -a REPO_ARRAY <<< "${{ needs.get-repos.outputs.final_repos }}"
-          if [[ ${#REPO_ARRAY[@]} -gt 1 ]]; then
-            repo=${REPO_ARRAY[1]}
-            echo "Updating $repo..."
-            git clone https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git
-            cd $repo
-            if [ -d "GunduzTech" ]; then
-              git checkout main
-              git pull origin main
-              if ! git ls-tree -d HEAD GunduzTech >/dev/null 2>&1; then
-                git subtree add --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
-              else
-                git subtree pull --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
-              fi
-              git add .
-              git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
-              git push origin main
-            fi
-            cd ..
-          fi
-
-  update-repos-3:
-    needs: get-repos
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure Git
-        run: |
-          git config --global user.email "frkngndz60@gmail.com"
-          git config --global user.name "dgdfurkan"
-
-      - name: Update GunduzTech-based project 3
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          IFS=',' read -r -a REPO_ARRAY <<< "${{ needs.get-repos.outputs.final_repos }}"
-          if [[ ${#REPO_ARRAY[@]} -gt 2 ]]; then
-            repo=${REPO_ARRAY[2]}
+          repo=${REPO_ARRAY[${{ matrix.repo-index }}]}
+          if [[ -n "$repo" && "$repo" != " " ]]; then
             echo "Updating $repo..."
             git clone https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git
             cd $repo
