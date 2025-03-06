@@ -48,7 +48,7 @@ jobs:
             git checkout main
             git pull origin main
             
-            git subtree pull --prefix=GunduzTech https://github.com/dgdfurkan/GunduzTech.git main --squash
+            git subtree pull --prefix=GunduzTech git@github.com:dgdfurkan/GunduzTech.git main --squash
             
             git add .
             git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
