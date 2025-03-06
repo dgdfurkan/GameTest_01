@@ -9,89 +9,78 @@ jobs:
   get-repos:
     runs-on: ubuntu-latest
     outputs:
-      final_repos: ${{ steps.set-repos.outputs.final_repos }}
+      final_repos: ${{ steps.filter-repos.outputs.final_repos }}
     steps:
-      - name: Checkout GunduzTech
-        uses: actions/checkout@v3
-
       - name: Configure Git
         run: |
           git config --global user.email "frkngndz60@gmail.com"
           git config --global user.name "dgdfurkan"
-
-      - name: Get all repositories
-        id: get_repos
+      
+      - name: Check for repositories with GunduzTech directory
+        id: filter-repos
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           echo "Fetching repository list..."
-          REPO_LIST=$(curl -s -H "Authorization: token ${GH_PAT}" "https://api.github.com/user/repos?per_page=100&affiliation=owner" | jq -r '.[] | select(.default_branch and .default_branch == "main") | .name')
-
-          echo "Filtered repository list:"
-          echo "$REPO_LIST"
-
-          echo "REPO_LIST=$(echo "$REPO_LIST" | tr '\n' ' ')" >> $GITHUB_ENV
-
-      - name: Clone and filter GunduzTech-based projects
-        id: set-repos
-        run: |
+          REPO_LIST=$(curl -s -H "Authorization: token ${GH_PAT}" "https://api.github.com/user/repos?per_page=100&affiliation=owner" | jq -r '.[] | select(.default_branch == "main") | .name')
+          
           FINAL_REPOS=()
-          for repo in $REPO_LIST
-          do
-            echo "Checking $repo..."
+          for repo in $REPO_LIST; do
+            echo "Checking $repo for GunduzTech directory..."
             
-            if [[ -z "$repo" || "$repo" == " " ]]; then
-              continue
-            fi
+            # Use GitHub API to check if the GunduzTech directory exists without cloning
+            DIR_CHECK=$(curl -s -H "Authorization: token ${GH_PAT}" "https://api.github.com/repos/dgdfurkan/$repo/contents/GunduzTech")
             
-            git clone --depth=1 https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git temp_repo 2>/dev/null || continue
-            if [ -d "temp_repo/GunduzTech" ]; then
+            if [[ "$DIR_CHECK" != *"Not Found"* && "$DIR_CHECK" != *"404"* ]]; then
               FINAL_REPOS+=("$repo")
               echo "$repo uses GunduzTech."
             else
               echo "Skipping $repo, no GunduzTech found."
             fi
-            rm -rf temp_repo
           done
           
-          echo "FINAL_REPOS=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
-          echo "final_repos=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
-          echo "final_repos=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
-          echo "::set-output name=final_repos::$(IFS=, ; echo "${FINAL_REPOS[*]}")"
+          echo "FINAL_REPOS=${FINAL_REPOS[*]}" >> $GITHUB_ENV
+          echo "final_repos=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_OUTPUT
 
   update-repos:
     needs: get-repos
     strategy:
       matrix:
         repo-index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+      fail-fast: false
     runs-on: ubuntu-latest
     steps:
       - name: Configure Git
         run: |
           git config --global user.email "frkngndz60@gmail.com"
           git config --global user.name "dgdfurkan"
-
+      
       - name: Update GunduzTech-based project
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           IFS=',' read -r -a REPO_ARRAY <<< "${{ needs.get-repos.outputs.final_repos }}"
           repo=${REPO_ARRAY[${{ matrix.repo-index }}]}
+          
           if [[ -n "$repo" && "$repo" != " " ]]; then
             echo "Updating $repo..."
             git clone https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git
             cd $repo
+            
             if [ -d "GunduzTech" ]; then
               git checkout main
               git pull origin main
+              
               if ! git ls-tree -d HEAD GunduzTech >/dev/null 2>&1; then
                 git subtree add --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
               else
                 git subtree pull --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
               fi
+              
               git add .
               git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
               git push origin main
             fi
+            
             cd ..
           fi
