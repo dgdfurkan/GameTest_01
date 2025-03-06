@@ -22,37 +22,63 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
+          echo "Fetching repository list..."
           REPO_LIST=$(curl -s -H "Authorization: token ${GH_PAT}" "https://api.github.com/user/repos?per_page=100&affiliation=owner" | jq -r '.[] | select(.default_branch and .default_branch == "main") | .name')
-          echo "REPO_LIST=$(echo "$REPO_LIST" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' ')" >> $GITHUB_ENV
 
-      - name: Filter only GunduzTech-based projects
+          echo "Filtered repository list:"
+          echo "$REPO_LIST"
+
+          echo "REPO_LIST=$(echo "$REPO_LIST" | tr '\n' ' ')" >> $GITHUB_ENV
+
+      - name: Clone and filter GunduzTech-based projects
         run: |
-          FINAL_REPOS=""
+          FINAL_REPOS=()
           for repo in $REPO_LIST
           do
-            if curl -s -H "Authorization: token ${GH_PAT}" "https://raw.githubusercontent.com/dgdfurkan/$repo/main/GunduzTech/.gunduztech" | grep -q "GunduzTech"; then
-              FINAL_REPOS="$FINAL_REPOS $repo"
+            echo "Checking $repo..."
+            
+            if [[ -z "$repo" || "$repo" == " " ]]; then
+              continue
             fi
+            
+            git clone --depth=1 https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git temp_repo 2>/dev/null || continue
+            if [ -d "temp_repo/GunduzTech" ]; then
+              FINAL_REPOS+=("$repo")
+              echo "$repo uses GunduzTech."
+            else
+              echo "Skipping $repo, no GunduzTech found."
+            fi
+            rm -rf temp_repo
           done
-          echo "FINAL_REPOS=$FINAL_REPOS" >> $GITHUB_ENV
+          
+          echo "FINAL_REPOS=$(IFS=, ; echo "${FINAL_REPOS[*]}")" >> $GITHUB_ENV
 
       - name: Update all GunduzTech-based projects
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          for repo in $FINAL_REPOS
+          IFS=',' read -r -a REPO_ARRAY <<< "$FINAL_REPOS"
+          for repo in "${REPO_ARRAY[@]}"
           do
-            git clone https://${GH_PAT}@github.com/dgdfurkan/$repo.git
+            echo "Updating $repo..."
+            
+            if [[ -z "$repo" || "$repo" == " " ]]; then
+              continue
+            fi
+            
+            git clone https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/$repo.git
             cd $repo
             
-            git checkout main
-            git pull origin main
-            
-            git subtree pull --prefix=GunduzTech git@github.com:dgdfurkan/GunduzTech.git main --squash
-            
-            git add .
-            git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
-            git push origin main
+            if [ -d "GunduzTech" ]; then
+              git checkout main
+              git pull origin main
+              
+              git subtree pull --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
+              
+              git add .
+              git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
+              git push origin main
+            fi
             
             cd ..
           done
