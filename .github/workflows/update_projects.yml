@@ -73,7 +73,11 @@ jobs:
               git checkout main
               git pull origin main
               
-              git subtree pull --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
+              if ! git ls-tree -d HEAD GunduzTech >/dev/null 2>&1; then
+                git subtree add --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
+              else
+                git subtree pull --prefix=GunduzTech https://${{ secrets.GH_PAT }}@github.com/dgdfurkan/GunduzTech.git main --squash
+              fi
               
               git add .
               git commit -m "Auto-update GunduzTech" || echo "No changes to commit"
